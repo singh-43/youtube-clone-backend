@@ -12,16 +12,15 @@ const options = {
     secure: true,
 }
 
-const generateAccessAndRefreshTokens = async (userId) => {
+const generateAccessAndRefreshTokens = async (user) => {
     try {
-        const user = await User.findById(userId);
         const accessToken = user.generateAccessToken();
         const refreshToken = user.generateRefreshToken();
 
         user.refreshToken = refreshToken;
         await user.save({ validateBeforeSave: false });
 
-        return { accessToken, refreshToken }
+        return { accessToken, refreshToken, user }
     } catch (error) {
         throw new ApiError(500, "Something went wrong while generating access and refresh token")
     }
@@ -112,16 +111,16 @@ const loginUser = asyncHandler( async (req, res) => {
         throw new ApiError(401, "Invalid user credentials")
     }
 
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+    const { accessToken, refreshToken, user: loggedInUser } = await generateAccessAndRefreshTokens(user);
 
-    const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
+    const { password: _password, refreshToken: _refreshToken, ...rest } = loggedInUser._doc;
 
     return res.status(200)
         .cookie("accessToken", accessToken, options)
         .cookie("refreshToken", refreshToken, options)
         .json(
             new ApiResponse(200, {
-                    user: loggedInUser, accessToken, refreshToken
+                    user: rest, accessToken, refreshToken
                 },
                 "User logged in successfully"
             )
