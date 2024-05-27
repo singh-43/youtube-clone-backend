@@ -5,7 +5,7 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiRespnse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { deleteOnCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 
 const options = {
     httpOnly: true,
@@ -69,8 +69,16 @@ const registerUser = asyncHandler( async (req, res) => {
 
     const user = await User.create({
         fullName,
-        avatar: avatar?.url,
-        coverImage: coverImage?.url || "",
+        avatar: {
+            url: avatar?.url,
+            publicId: avatar?.public_id,
+            resourceType: avatar?.resource_type,
+        },
+        coverImage: {
+            url: coverImage?.url || "",
+            publicId: coverImage?.public_id || "",
+            resourceType: coverImage?.resource_type,
+        },
         email,
         password,
         username: username.toLowerCase(),
@@ -79,6 +87,8 @@ const registerUser = asyncHandler( async (req, res) => {
     const { password: _password, refreshToken, ...rest } = user._doc;
 
     if (!rest) {
+        await deleteOnCloudinary(avatar?.url, avatar?.public_id, avatar?.resourceType)
+        await deleteOnCloudinary(coverImage?.url, coverImage?.public_id, coverImage?.resourceType)
         throw new ApiError(500, "Something went wrong while registering the user")
     }
 
@@ -242,6 +252,13 @@ const updateAccountDetails = asyncHandler ( async (req, res) => {
 } )
 
 const updateUserCoverImage = asyncHandler ( async (req, res) => {
+
+    const { url, publicId, resourceType } = req?.user.coverImage;
+
+    if (!(url || publicId || resourceType)) {
+        throw new ApiError(404, "Something went wrong while updating user cover image")
+    }
+
     const coverImageLocalPath = req?.file.path;
     if (!coverImageLocalPath) {
         throw new ApiError(400, "Cover image file is required")
@@ -257,13 +274,31 @@ const updateUserCoverImage = asyncHandler ( async (req, res) => {
         req.user?._id,
         {
             $set: {
-                coverImage: coverImage?.url
+                coverImage: {
+                    url: coverImage?.url,
+                    resourceType: coverImage?.resource_type,
+                    publicId: coverImage?.public_id,
+                }
             }
         },
         {
             new: true
         }
-    ).select("-password, -refreshToken")
+    ).select("-password -refreshToken")
+
+    if (!user) {
+        await deleteOnCloudinary(coverImage?.url, coverImage?.publicId, coverImage?.resourceType);
+        throw new ApiError(404, "User not found")
+    }
+
+    if (url) {
+        try {
+            await deleteOnCloudinary(url, publicId, resourceType);
+        } catch (error) {
+            console.log(`Failed to Delete Old Image From Cloudinary Server ${error}`);
+            throw new ApiError(500, error?.message || 'Server Error');
+        }
+    }
 
     return res
         .status(200)
@@ -275,6 +310,13 @@ const updateUserCoverImage = asyncHandler ( async (req, res) => {
 } )
 
 const updateUserAvatar = asyncHandler ( async (req, res) => {
+
+    const { url, publicId, resourceType } = req?.user.avatar;
+
+    if (!(url || publicId || resourceType)) {
+        throw new ApiError(404, "Something went wrong while updating user avatar")
+    }
+
     const avatarLocalPath = req?.file.path;
     if (!avatarLocalPath) {
         throw new ApiError(400, "Avatar file is required")
@@ -290,13 +332,31 @@ const updateUserAvatar = asyncHandler ( async (req, res) => {
         req.user?._id,
         {
             $set: {
-                avatar: avatar?.url
+                avatar: {
+                    url: avatar?.url,
+                    publicId: avatar?.public_id,
+                    resourceType: avatar?.resource_type,
+                }
             }
         },
         {
             new: true
         }
-    ).select("-password, -refreshToken")
+    ).select("-password -refreshToken")
+
+    if (!user) {
+        await deleteOnCloudinary(avatar?.url, avatar?.publicId, avatar?.resourceType);
+        throw new ApiError(404, "User not found")
+    }
+
+    if (url) {
+        try {
+            await deleteOnCloudinary(url, publicId, resourceType);
+        } catch (error) {
+            console.log(`Failed to Delete Old Image From Cloudinary Server ${error}`);
+            throw new ApiError(500, error?.message || 'Server Error');
+        }
+    }
 
     return res
         .status(200)
