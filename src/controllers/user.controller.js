@@ -1,5 +1,6 @@
-import mongoose from 'mongoose';
+import fs from 'fs';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiRespnse.js";
@@ -36,20 +37,24 @@ const registerUser = asyncHandler( async (req, res) => {
         throw new ApiError(400, "All fields are required")
     }
 
-    const existingUser = await User.findOne({ 
-        $or: [{ email }, { username }]
-    })
-
-    if (existingUser) {
-        throw new ApiError(409, "User with this email or username already exists")
-    }
-
     const avatarLocalPath = req.files?.avatar[0]?.path;
-
     let coverImageLocalPath;
 
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
         coverImageLocalPath = req.files.coverImage[0].path;
+    }
+
+    const existingUser = await User.findOne({ 
+        $or: [{ email }, { username }]
+    })
+    
+
+    if (existingUser) {
+
+        fs.unlinkSync(avatarLocalPath)
+        fs.unlinkSync(coverImageLocalPath)
+        
+        throw new ApiError(409, "User with this email or username already exists")
     }
 
     if (!avatarLocalPath) {
@@ -72,16 +77,14 @@ const registerUser = asyncHandler( async (req, res) => {
         username: username.toLowerCase(),
     })
 
-    const userCreated = await User.findById(user._id).select(
-        "-password -refreshToken"
-    );
+    const { password: _password, refreshToken, ...rest } = user._doc;
 
-    if (!userCreated) {
+    if (!rest) {
         throw new ApiError(500, "Something went wrong while registering the user")
     }
 
     return res.status(201).json(
-        new ApiResponse(200, userCreated, "User registered successfully")
+        new ApiResponse(200, rest, "User registered successfully")
     )
 } )
 
