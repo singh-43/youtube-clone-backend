@@ -241,36 +241,30 @@ const updateVideo = asyncHandler ( async (req, res) => {
         }
 
         if (thumbnailLocalPath) {
-            thumbnail = {
-                publicId: updateVideo?.thumbnail?.public_id,
-                resourceType: updateVideo?.thumbnail?.resource_type,
-            }
+            await Promise.all([
+                deleteOnCloudinary(updatedVideo?.thumbnail?.publicId, updatedVideo?.thumbnail?.resourceType),
+            ])
+            updatedVideo.thumbnail = thumbnail;
         }
 
         if (videoLocalPath) {
-            videoFile = {
-                publicId: updateVideo?.videoFile?.public_id,
-                resourceType: updateVideo?.videoFile?.resource_type,
-            }
+            await Promise.all([
+                deleteOnCloudinary(updatedVideo?.videoFile?.publicId, updatedVideo?.videoFile?.resourceType)
+            ])
+            updatedVideo.videoFile = videoFile;
         }
 
-        if (thumbnail) {
-            await Promise.all([
-                deleteOnCloudinary(thumbnail?.publicId, thumbnail?.resourceType),
-            ])
-        }
-        
-        if (videoFile) {
-            await Promise.all([
-                deleteOnCloudinary(videoFile?.publicId, videoFile?.resourceType)
-            ])
-        }
+        updatedVideo.title = title || updatedVideo.title;
+        updatedVideo.description = description || updatedVideo.title;
     
         return res.status(200)
             .json(new ApiResponse(200, updatedVideo, "Video updated successfully"))
+
     } catch (error) {
-        if (thumbnailLocalPath) fs.unlinkSync(thumbnailLocalPath)
-        if (videoLocalPath) fs.unlinkSync(videoLocalPath)
+        
+        if(thumbnailLocalPath && error.message === "Video title and description cannot be empty") fs.unlinkSync(thumbnailLocalPath)
+        if(videoFile && error.message === "Video title and description cannot be empty") fs.unlinkSync(videoFile)
+
         try {
             if (thumbnail) {
                 await deleteOnCloudinary(thumbnail?.publicId, thumbnail?.resourceType)
@@ -279,7 +273,7 @@ const updateVideo = asyncHandler ( async (req, res) => {
                 await deleteOnCloudinary(videoFile?.publicId, videoFile?.resourceType)
             }
         } catch (error) {
-            throw new ApiError(500, "Error while deleting files on cloudinary")
+            throw new ApiError(error.statusCode || 500, error || "Error while deleting files on cloudinary")
         }
         throw new ApiError(error.statusCode || 500, error || "Server error")
     }
