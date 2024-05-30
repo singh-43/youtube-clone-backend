@@ -3,7 +3,7 @@ import { upload } from './../middlewares/multer.middleware.js';
 import { verifyJWT } from './../middlewares/auth.middleware.js';
 import { 
     getAllVideos, getVideoById, publishAVideo,
-    deleteVideo, updateVideo, togglePublishStatus,
+    deleteVideo, updateVideo, togglePublishStatus, getUserVideos,
 } from "../controllers/video.controller.js";
 
 const router = Router();
@@ -29,7 +29,20 @@ router.route("/")
 router.route("/:videoId")
     .get(getVideoById)
     .delete(deleteVideo)
-    .patch(upload.single("thumbnail"), updateVideo)
+    .patch(
+        upload.fields([
+            {
+                name: "videoFile",
+                maxCount: 1,
+            },
+            {
+                name: "thumbnail",
+                maxCount: 1,
+            },
+        ]),
+        updateVideo)
+
+router.route("/user/:userId").get(getUserVideos)
 
 router.route("/toggle/publish/:videoId", togglePublishStatus)
 

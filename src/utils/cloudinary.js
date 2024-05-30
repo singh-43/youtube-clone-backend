@@ -24,9 +24,9 @@ const uploadOnCloudinary = async ( localFilePath ) => {
     }
 }
 
-const deleteOnCloudinary = async ( oldImageUrl, publicId, resourceType ) => {
+const deleteOnCloudinary = async ( publicId, resourceType ) => {
     try {
-        if (!(oldImageUrl || publicId)) {
+        if (!publicId) {
             throw new ApiError(404, "Old image and its public id is required")
         }
 
@@ -35,9 +35,8 @@ const deleteOnCloudinary = async ( oldImageUrl, publicId, resourceType ) => {
             { resource_type: resourceType },
         )
 
-        console.log("Asset deleted from cloudinary", result)
     } catch (error) {
-        console.log("Error while deleting old image on cloudinary", error)
+        
         throw new ApiError(500, error?.message || "Server error")
     }
 }

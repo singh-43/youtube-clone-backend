@@ -12,6 +12,10 @@ const videoSchema = new Schema(
                 type: String,
                 required: true,
             },
+            resourceType: {
+                type: String,
+                required: true,
+            },
         },
         thumbnail: {
             publicId: {
@@ -19,6 +23,10 @@ const videoSchema = new Schema(
                 required: true,
             },
             url: {
+                type: String,
+                required: true,
+            },
+            resourceType: {
                 type: String,
                 required: true,
             },

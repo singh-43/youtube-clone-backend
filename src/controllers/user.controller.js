@@ -36,24 +36,19 @@ const registerUser = asyncHandler( async (req, res) => {
         throw new ApiError(400, "All fields are required")
     }
 
+    const existingUser = await User.findOne({ 
+        $or: [{ email }, { username }]
+    })
+
+    if (existingUser) {
+        throw new ApiError(409, "User with this email or username already exists")
+    }
+
     const avatarLocalPath = req.files?.avatar[0]?.path;
     let coverImageLocalPath;
 
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
         coverImageLocalPath = req.files.coverImage[0].path;
-    }
-
-    const existingUser = await User.findOne({ 
-        $or: [{ email }, { username }]
-    })
-    
-
-    if (existingUser) {
-
-        fs.unlinkSync(avatarLocalPath)
-        fs.unlinkSync(coverImageLocalPath)
-        
-        throw new ApiError(409, "User with this email or username already exists")
     }
 
     if (!avatarLocalPath) {
@@ -287,13 +282,13 @@ const updateUserCoverImage = asyncHandler ( async (req, res) => {
     ).select("-password -refreshToken")
 
     if (!user) {
-        await deleteOnCloudinary(coverImage?.url, coverImage?.publicId, coverImage?.resourceType);
+        await deleteOnCloudinary(coverImage?.publicId, coverImage?.resourceType);
         throw new ApiError(404, "User not found")
     }
 
     if (url) {
         try {
-            await deleteOnCloudinary(url, publicId, resourceType);
+            await deleteOnCloudinary(publicId, resourceType);
         } catch (error) {
             console.log(`Failed to Delete Old Image From Cloudinary Server ${error}`);
             throw new ApiError(500, error?.message || 'Server Error');
@@ -345,13 +340,13 @@ const updateUserAvatar = asyncHandler ( async (req, res) => {
     ).select("-password -refreshToken")
 
     if (!user) {
-        await deleteOnCloudinary(avatar?.url, avatar?.publicId, avatar?.resourceType);
+        await deleteOnCloudinary(avatar?.publicId, avatar?.resourceType);
         throw new ApiError(404, "User not found")
     }
 
     if (url) {
         try {
-            await deleteOnCloudinary(url, publicId, resourceType);
+            await deleteOnCloudinary(publicId, resourceType);
         } catch (error) {
             console.log(`Failed to Delete Old Image From Cloudinary Server ${error}`);
             throw new ApiError(500, error?.message || 'Server Error');
@@ -436,59 +431,20 @@ const getUserChannelProfile = asyncHandler( async (req, res) => {
         .status(200)
         .json(new ApiResponse(
             200,
-            channel[0],
+            channel,
             "User channel fetched successfully"
         ))
 } )
 
 const getWatchHistory = asyncHandler ( async (req, res) => {
-    const user = await User.aggregate([
-        {
-            $match: {
-                _id: new mongoose.Types.ObjectId(req.user._id)
-            }
-        },
-        {
-            $lookup: {
-                from: "videos",
-                localField: "watchHistory",
-                foreignField: "_id",
-                as: "watchHistory",
-                pipeline: [
-                    {
-                        $lookup: {
-                            from: "Users",
-                            localField: "owner",
-                            foreignField: "_id",
-                            as: "owner",
-                            pipeline: [
-                                {
-                                    $project: {
-                                        fullName: 1,
-                                        username: 1,
-                                        avatar: 1,
-                                    }
-                                },
-                            ]
-                        }
-                    },
-                    {
-                        $addFields: {
-                            owner: {
-                                $first: "$owner"
-                            }
-                        }
-                    },
-                ]
-            }
-        }
-    ])
+
+    const user = await User.findById(req.user._id)
 
     return res
         .status(200)
         .json(new ApiResponse(
             200,
-            user[0].watchHistory,
+            user.watchHistory,
             "User watch history fetched successfully"
         ))
 } )
