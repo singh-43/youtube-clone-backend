@@ -9,167 +9,167 @@ import { deleteOnCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 
 const getAllVideos = asyncHandler ( async (req, res) => {
 
-    const { page = 1,
+    let { page = 1,
         limit = 10,
         query = "",
         sortBy,
         sortType = "asc",
         userId 
     } = req.query;
+
+    page = ( isNaN(page) && page <= 0 ) ? 1 : Number(page);
+    limit = ( isNaN(limit) && limit <= 0 ) ? 1 : Number(limit);
     
     /* METHOD 1 */
 
-    // let sortCriteria = {}, videoQuery = {};
+    let sortCriteria = {}, videoQuery = {};
 
-    // if (query.trim() !== "") {
-    //     videoQuery.$or = [
-    //         { title: { $regex: query, $options: 'i' } },
-    //         { description: { $regex: query, $options: 'i' } }
-    //     ]
-    // }
+    if (query.trim() !== "") {
+        videoQuery.$or = [
+            { title: { $regex: query, $options: 'i' } },
+            { description: { $regex: query, $options: 'i' } }
+        ]
+    }
     
-    // if (userId && isValidObjectId(userId)) {
-    //     videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
-    // } else if(userId) {
-    //     throw new ApiError(404, "Invalid user id")
-    // }
+    if (userId && isValidObjectId(userId)) {
+        videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
+    } else if(userId) {
+        throw new ApiError(404, "Invalid user id")
+    }
 
-    // if (sortBy) {
-    //     sortCriteria[sortBy] = sortType === "asc" ? 1 : -1
-    // }
+    if (sortBy) {
+        sortCriteria[sortBy] = sortType === "asc" ? 1 : -1
+    }
 
-    // const videoData = await Video.find(videoQuery)
-    // .populate("owner", "username")
-    // .sort(sortCriteria)
-    // .skip((parseInt(page) - 1) * parseInt(limit))
-    // .limit(parseInt(limit))
+    const videoData = await Video.find(videoQuery)
+    .populate("owner", "username")
+    .sort(sortCriteria)
+    .skip((page - 1) * limit)
+    .limit(limit)
 
-    // if (!videoData) {
-    //     throw new ApiError(404, "Error while fetching videos");
-    // }
+    if (!videoData) {
+        throw new ApiError(404, "Error while fetching videos");
+    }
 
-    // const totalVideos = await Video.countDocuments()
+    const totalVideos = videoData?.length > 0 ? await Video.countDocuments() : 0;
 
-    // let videos = []
+    let videos = []
 
-    // videoData?.forEach((element) => {
-    //     element = element?._doc;
-    //     let obj = {
-    //         ...element,
-    //         videoFile: element?.videoFile.url,
-    //         thumbnail: element?.thumbnail.url,
-    //     };
-    //     videos.push(obj);
-    // })
+    videoData?.forEach((element) => {
+        element = element?._doc;
+        let obj = {
+            ...element,
+            videoFile: element?.videoFile.url,
+            thumbnail: element?.thumbnail.url,
+        };
+        videos.push(obj);
+    })
 
-    // const totalPages = totalVideos > parseInt(limit) ? Math.ceil(totalVideos/parseInt(limit)) : 1;
-    // const hasNextPage = parseInt(page) < parseInt(totalPages);
-    // const hasPrevPage = parseInt(page) !== 1 && parseInt(page) <= parseInt(totalPages);
-    // const prevPage = hasPrevPage ? parseInt(page) - 1 : null;
-    // const nextPage = hasNextPage ? parseInt(page) + 1 : null;
-    // const pagingCounter = function (page){
-        
-    // }
 
-    // return res.status(200)
-    //     .json(new ApiResponse(200, {
-    //         videos,
-    //         totalVideos,
-    //         limit,
-    //         page,
-    //         totalPages,
-    //         pagingCounter,
-    //         hasPrevPage,
-    //         hasNextPage,
-    //         prevPage,
-    //         nextPage,
-    //     }, "All videos fetched successfully"))
+    const totalPages = totalVideos > limit ? Math.ceil(totalVideos/limit) : 1;
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page !== 1 && page <= totalPages;
+    const prevPage = hasPrevPage ? page - 1 : null;
+    const nextPage = hasNextPage ? page + 1 : null;
+
+    return res.status(200)
+        .json(new ApiResponse(200, {
+            videos,
+            totalVideos,
+            limit,
+            page,
+            totalPages,
+            hasPrevPage,
+            hasNextPage,
+            prevPage,
+            nextPage,
+        }, "All videos fetched successfully"))
 
     /* METHOD 2 */
 
-    let videoQuery = {}
+    // let videoQuery = {}
 
-    if (query.trim() !== "") {
-        videoQuery = {
-            $or: [
-                { title: { $regex: query, $options: "i" } },
-                { description: { $regex: query, $options: "i" } }
-            ]
-        }
-    }
+    // if (query.trim() !== "") {
+    //     videoQuery = {
+    //         $or: [
+    //             { title: { $regex: query, $options: "i" } },
+    //             { description: { $regex: query, $options: "i" } }
+    //         ]
+    //     }
+    // }
 
-    if (userId && isValidObjectId(userId)) {
-        videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
-    }
+    // if (userId && isValidObjectId(userId)) {
+    //     videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
+    // }
 
-    const videosData = Video.aggregate([
-        {
-            $match: videoQuery
-        },
-        {
-            $lookup: {
-                from: "users",
-                localField: "owner",
-                foreignField: "_id",
-                as: "owner",
-                pipeline: [
-                    {
-                        $project: {
-                            username: 1,
-                            email: 1
-                        }
-                    }
-                ]
-            }
-        },
-        {
-            $addFields: {
-                owner: {
-                    $first: "$owner"
-                }
-            }
-        },        
-        {
-            $project: {
-                videoFile: "$videoFile.url",
-                thumbnail: "$thumbnail.url",
-                title: 1,
-                description: 1,
-                views: 1,
-                owner: 1,
-                isPublished: 1,
-                createdAt: 1,
-                updatedAt: 1,
-                duration: 1,
-            }
-        },
-        {
-            $sort: {
-                [sortBy || "createdAt"]: sortType === "asc" ? 1 : -1 || 1
-            }
-        }
-    ])
+    // const videosData = Video.aggregate([
+    //     {
+    //         $match: videoQuery
+    //     },
+    //     {
+    //         $lookup: {
+    //             from: "users",
+    //             localField: "owner",
+    //             foreignField: "_id",
+    //             as: "owner",
+    //             pipeline: [
+    //                 {
+    //                     $project: {
+    //                         username: 1,
+    //                         email: 1
+    //                     }
+    //                 }
+    //             ]
+    //         }
+    //     },
+    //     {
+    //         $addFields: {
+    //             owner: {
+    //                 $first: "$owner"
+    //             }
+    //         }
+    //     },        
+    //     {
+    //         $project: {
+    //             videoFile: "$videoFile.url",
+    //             thumbnail: "$thumbnail.url",
+    //             title: 1,
+    //             description: 1,
+    //             views: 1,
+    //             owner: 1,
+    //             isPublished: 1,
+    //             createdAt: 1,
+    //             updatedAt: 1,
+    //             duration: 1,
+    //         }
+    //     },
+    //     {
+    //         $sort: {
+    //             [sortBy || "createdAt"]: sortType === "asc" ? 1 : -1 || 1
+    //         }
+    //     }
+    // ])
 
-    const options = {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        customLabels: {
-            totalDocs: "totalVideos",
-            docs: "videos",
+    // const options = {
+    //     page: page,
+    //     limit: limit,
+    //     customLabels: {
+    //         totalDocs: "totalVideos",
+    //         docs: "videos",
 
-        },
-        skip: (parseInt(page) - 1) * parseInt(limit),
-        limit: parseInt(limit),
-    }
+    //     },
+    //     skip: (page - 1) * limit,
+    //     limit: limit,
+    // }
 
-    Video.aggregatePaginate(videosData, options)
-    .then((videos) => {
-        return res.status(200)
-            .json(new ApiResponse(200, videos, "All videos fetched successfully"))
-    })
-    .catch((error) => {
-        throw new ApiError(error?.statusCode || 500, error?.message || "Server Error")
-    })
+    // Video.aggregatePaginate(videosData, options)
+    // .then((videos) => {
+    //     return res.status(200)
+    //         .json(new ApiResponse(200, videos, "All videos fetched successfully"))
+    // })
+    // .catch((error) => {
+    //     throw new ApiError(error?.statusCode || 500, error?.message || "Server Error")
+    // })
     
 } )
 
