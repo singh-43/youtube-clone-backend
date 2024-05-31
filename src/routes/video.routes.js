@@ -3,7 +3,7 @@ import { upload } from './../middlewares/multer.middleware.js';
 import { verifyJWT } from './../middlewares/auth.middleware.js';
 import { 
     getAllVideos, getVideoById, publishAVideo,
-    deleteVideo, updateVideo, togglePublishStatus, getUserVideos,
+    deleteVideo, updateVideo, togglePublishStatus,
 } from "../controllers/video.controller.js";
 
 const router = Router();
@@ -41,8 +41,6 @@ router.route("/:videoId")
             },
         ]),
         updateVideo)
-
-router.route("/user/:userId").get(getUserVideos)
 
 router.route("/toggle/publish/:videoId", togglePublishStatus)
 

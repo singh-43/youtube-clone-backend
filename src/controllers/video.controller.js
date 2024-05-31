@@ -8,36 +8,169 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import { deleteOnCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 
 const getAllVideos = asyncHandler ( async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
 
-    //TODO: get all videos based on query, sort, pagination
-
-    const matchCondition = {
-        $or: [
-            { title: { $regex: query, $options: "i" } },
-            { description: { $regex: query, $options: "i" } }
-        ]
-    };
-
-    if (userId) {
-        matchCondition.owner = new mongoose.Types.ObjectId(userId);
-    }
-
-
-    let videoAggregate;
-
+    const { page = 1,
+        limit = 10,
+        query = "",
+        sortBy,
+        sortType = "asc",
+        userId 
+    } = req.query;
     
+    /* METHOD 1 */
 
-    try {
-        return res.status(200)
-            .json(
-                new ApiResponse(200, matchCondition, "Videos fetched successfully")
-            )
-    } catch (error) {
-        console.log("Error in video aggregation", error);
-        throw new ApiError(500, error?.message || "Internal server error in video aggregation")
+    // let sortCriteria = {}, videoQuery = {};
+
+    // if (query.trim() !== "") {
+    //     videoQuery.$or = [
+    //         { title: { $regex: query, $options: 'i' } },
+    //         { description: { $regex: query, $options: 'i' } }
+    //     ]
+    // }
+    
+    // if (userId && isValidObjectId(userId)) {
+    //     videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
+    // } else if(userId) {
+    //     throw new ApiError(404, "Invalid user id")
+    // }
+
+    // if (sortBy) {
+    //     sortCriteria[sortBy] = sortType === "asc" ? 1 : -1
+    // }
+
+    // const videoData = await Video.find(videoQuery)
+    // .populate("owner", "username")
+    // .sort(sortCriteria)
+    // .skip((parseInt(page) - 1) * parseInt(limit))
+    // .limit(parseInt(limit))
+
+    // if (!videoData) {
+    //     throw new ApiError(404, "Error while fetching videos");
+    // }
+
+    // const totalVideos = await Video.countDocuments()
+
+    // let videos = []
+
+    // videoData?.forEach((element) => {
+    //     element = element?._doc;
+    //     let obj = {
+    //         ...element,
+    //         videoFile: element?.videoFile.url,
+    //         thumbnail: element?.thumbnail.url,
+    //     };
+    //     videos.push(obj);
+    // })
+
+    // const totalPages = totalVideos > parseInt(limit) ? Math.ceil(totalVideos/parseInt(limit)) : 1;
+    // const hasNextPage = parseInt(page) < parseInt(totalPages);
+    // const hasPrevPage = parseInt(page) !== 1 && parseInt(page) <= parseInt(totalPages);
+    // const prevPage = hasPrevPage ? parseInt(page) - 1 : null;
+    // const nextPage = hasNextPage ? parseInt(page) + 1 : null;
+    // const pagingCounter = function (page){
+        
+    // }
+
+    // return res.status(200)
+    //     .json(new ApiResponse(200, {
+    //         videos,
+    //         totalVideos,
+    //         limit,
+    //         page,
+    //         totalPages,
+    //         pagingCounter,
+    //         hasPrevPage,
+    //         hasNextPage,
+    //         prevPage,
+    //         nextPage,
+    //     }, "All videos fetched successfully"))
+
+    /* METHOD 2 */
+
+    let videoQuery = {}
+
+    if (query.trim() !== "") {
+        videoQuery = {
+            $or: [
+                { title: { $regex: query, $options: "i" } },
+                { description: { $regex: query, $options: "i" } }
+            ]
+        }
     }
 
+    if (userId && isValidObjectId(userId)) {
+        videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
+    }
+
+    const videosData = Video.aggregate([
+        {
+            $match: videoQuery
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            email: 1
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            $addFields: {
+                owner: {
+                    $first: "$owner"
+                }
+            }
+        },        
+        {
+            $project: {
+                videoFile: "$videoFile.url",
+                thumbnail: "$thumbnail.url",
+                title: 1,
+                description: 1,
+                views: 1,
+                owner: 1,
+                isPublished: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                duration: 1,
+            }
+        },
+        {
+            $sort: {
+                [sortBy || "createdAt"]: sortType === "asc" ? 1 : -1 || 1
+            }
+        }
+    ])
+
+    const options = {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        customLabels: {
+            totalDocs: "totalVideos",
+            docs: "videos",
+
+        },
+        skip: (parseInt(page) - 1) * parseInt(limit),
+        limit: parseInt(limit),
+    }
+
+    Video.aggregatePaginate(videosData, options)
+    .then((videos) => {
+        return res.status(200)
+            .json(new ApiResponse(200, videos, "All videos fetched successfully"))
+    })
+    .catch((error) => {
+        throw new ApiError(error?.statusCode || 500, error?.message || "Server Error")
+    })
+    
 } )
 
 const publishAVideo = asyncHandler ( async (req, res) => {
@@ -45,6 +178,14 @@ const publishAVideo = asyncHandler ( async (req, res) => {
 
     
     let thumbnailLocalPath, videoLocalPath, thumbnail, video;
+    
+    if (req.files && Array.isArray(req.files.thumbnail) && req.files.thumbnail.length > 0) {
+        thumbnailLocalPath = req.files.thumbnail[0].path;
+    }
+
+    if (req.files && Array.isArray(req.files.videoFile) && req.files.videoFile.length > 0) {
+        videoLocalPath = req.files.videoFile[0].path;
+    }
     
     try {
 
@@ -54,13 +195,6 @@ const publishAVideo = asyncHandler ( async (req, res) => {
             throw new ApiError(404, "All fields are required")
         }
 
-        if (req.files && Array.isArray(req.files.thumbnail) && req.files.thumbnail.length > 0) {
-            thumbnailLocalPath = req.files.thumbnail[0].path;
-        }
-    
-        if (req.files && Array.isArray(req.files.videoFile) && req.files.videoFile.length > 0) {
-            videoLocalPath = req.files.videoFile[0].path;
-        }
     
         if (!(thumbnailLocalPath && videoLocalPath )) {
             if (thumbnailLocalPath) fs.unlinkSync(thumbnailLocalPath);
@@ -102,19 +236,23 @@ const publishAVideo = asyncHandler ( async (req, res) => {
             .json(new ApiResponse(200, videoUploaded, "Video published successfully"))
             
     } catch (error) {
-        if (thumbnailLocalPath) fs.unlinkSync(thumbnailLocalPath)
-        if (videoLocalPath) fs.unlinkSync(videoLocalPath)
-        if (thumbnail || video) {
-            try {
+        if (thumbnailLocalPath && error.message === "All fields are required") fs.unlinkSync(thumbnailLocalPath)
+        if (videoLocalPath && error.message === "All fields are required") fs.unlinkSync(videoLocalPath)
+        try {
+            if (thumbnail) {
                 await Promise.all([
-                    deleteOnCloudinary(thumbnail.publicId, thumbnail.resourceType),
+                    deleteOnCloudinary(thumbnail.publicId, thumbnail.resourceType)
+                ])
+            }
+            if (video) {
+                await Promise.all([
                     deleteOnCloudinary(video.publicId, video.resourceType)
                 ])
-            } catch (error) {
-                throw new ApiError(500, "Error while deleting file on cloudinary")
             }
+        } catch (error) {
+            throw new ApiError(error.statusCode|| 500, "Error while deleting file on cloudinary")
         }
-        throw new ApiError(500, error || "Server error")
+        throw new ApiError(error.statusCode || 500, error || "Server error")
     }
 
 } )
@@ -261,7 +399,7 @@ const updateVideo = asyncHandler ( async (req, res) => {
             .json(new ApiResponse(200, updatedVideo, "Video updated successfully"))
 
     } catch (error) {
-        
+
         if(thumbnailLocalPath && error.message === "Video title and description cannot be empty") fs.unlinkSync(thumbnailLocalPath)
         if(videoFile && error.message === "Video title and description cannot be empty") fs.unlinkSync(videoFile)
 
@@ -319,147 +457,6 @@ const deleteVideo = asyncHandler ( async (req, res) => {
     }
 } )
 
-const getUserVideos = asyncHandler ( async (req, res) => {
-
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-        throw new ApiError(404, "Invalid user id")
-    }
-
-    const user = await User.findById(mongoose.Types.ObjectId.createFromHexString(userId));
-
-    if (!user) {
-        throw new ApiError(404, "User does not exist")
-    }
-
-    /* METHOD 1 */
-    // const userData = await Video.find({owner: userId})
-    const userData = await Video.find({owner: userId})
-    .populate('owner', 'username email');
-
-    if (!userData) throw new ApiError(404, "Error while fetching videos")
-
-    let userVideos = [];
-    userData.forEach(element => {
-        element = element?._doc;
-        let obj  = {
-            ...element,
-            videoFile: element?.videoFile.url,
-            thumbnail: element?.thumbnail.url,
-            // if using 2nd find method i.e. using find with populate
-            // owner: element.owner.username,
-        }   
-        userVideos.push(obj)
-    });
-
-    /* METHOD 2 */
-
-    // const userVideos = await Video.aggregate([
-    //     {
-    //         $match: {
-    //             owner: mongoose.Types.ObjectId.createFromHexString(userId)
-    //         }
-    //     }
-    // ])
-
-    // const userVideos = await Video.aggregate([
-    //     {
-    //         $match: {
-    //             owner: mongoose.Types.ObjectId.createFromHexString(userId)
-    //         }
-    //     },
-    //     {
-    //         $project: {
-    //             title: 1,
-    //             description: 1,
-    //             duration: 1,
-    //             views: 1,
-    //             isPublished: 1,
-    //             owner: 1,
-    //             videoFile: "$videoFile.url",
-    //             thumbnail: "$thumbnail.url",
-    //             createdAt: 1,
-    //             updatedAt: 1,
-    //         }
-    //     },
-    //     // below code is to populate owner data
-    //     {
-    //         $lookup: {
-    //             from: "users",
-    //             localField: "owner",
-    //             foreignField: "_id",
-    //             as: "owner",
-    //             pipeline: [
-    //                 {
-    //                     $project: {
-    //                         username: 1,
-    //                         email: 1,
-    //                     }
-    //                 }
-    //             ]
-    //         }
-    //     }
-    // ])
-    
-    /* METHOD 3 */
-
-    // const userVideos = await User.aggregate([
-    //     {
-    //         $match: {
-    //             // _id: new mongoose.Types.ObjectId(userId)
-    //             //above constructor method is deprecated
-    //             _id: mongoose.Types.ObjectId.createFromHexString(userId)
-    //         }
-    //     },
-    //     {
-    //         $lookup: {
-    //             from: "videos",
-    //             localField: "_id",
-    //             foreignField: "owner",
-    //             as: "videosData",
-    //             pipeline: [
-    //                 {
-    //                     $project: {
-    //                         title: 1,
-    //                         description: 1,
-    //                         duration: 1,
-    //                         views: 1,
-    //                         isPublished: 1,
-    //                         owner: 1,
-    //                         videoFile: "$videoFile.url",
-    //                         thumbnail: "$thumbnail.url",
-    //                         createdAt: 1,
-    //                         updatedAt: 1,
-    //                     }
-    //                 },
-    //                 // below logic is to populate owner data
-    //                 {
-    //                     $lookup: {
-    //                         from: "users",
-    //                         localField: "owner",
-    //                         foreignField: "_id",
-    //                         as: "owner",
-    //                         pipeline: [
-    //                             {
-    //                                 $project: {
-    //                                     username: 1,
-    //                                     email: 1
-    //                                 }
-    //                             },
-    //                         ]
-    //                     }
-    //                 },
-    //             ]
-    //         }
-    //     },
-    // ])
-
-    return res.status(200)
-        .json(new ApiResponse(200, userVideos, "All videos fetched"))
-
-} )
-
 const togglePublishStatus = asyncHandler ( async (req, res) => {
     const { videoId } = req.params;
 
@@ -472,5 +469,4 @@ export {
     updateVideo,
     deleteVideo,
     togglePublishStatus,
-    getUserVideos,
 }
