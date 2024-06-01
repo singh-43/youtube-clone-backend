@@ -327,7 +327,7 @@ const getVideoById = asyncHandler ( async (req, res) => {
 const updateVideo = asyncHandler ( async (req, res) => {
     const { videoId } = req.params;
 
-    let thumbnailLocalPath, videoLocalPath, thumbnail, videoFile;
+    let thumbnailLocalPath, videoLocalPath, thumbnail, videoFile, duration;
     
     if (req.files && Array.isArray(req.files.thumbnail) && req.files.thumbnail.length > 0) {
         thumbnailLocalPath = req.files.thumbnail[0].path;
@@ -342,16 +342,6 @@ const updateVideo = asyncHandler ( async (req, res) => {
     try {
         if (!isValidObjectId(videoId)) {
             throw new ApiError(404, "Invalid video id")
-        }
-
-        const oldVideoData = await Video.findById(videoId)
-
-        if (!oldVideoData) {
-            throw new ApiError(404, "Video not found")
-        }
-
-        if (req?.user?._id?.toString() !== oldVideoData?.owner?.toString()) {
-            throw new ApiError(404, "Unauthorized Access. You are not allowed to update this video details")
         }
     
         if ( title?.trim().length === 0 || description?.trim().length === 0 ) {
@@ -374,6 +364,7 @@ const updateVideo = asyncHandler ( async (req, res) => {
                 publicId: res?.public_id,
                 resourceType: res?.resource_type
             }
+            duration = res?.duration;
         }
     
         const updatedVideo = await Video.findByIdAndUpdate(
@@ -384,6 +375,7 @@ const updateVideo = asyncHandler ( async (req, res) => {
                     title,
                     thumbnail,
                     videoFile,
+                    duration,
                 }
             }
         )
@@ -446,77 +438,54 @@ const deleteVideo = asyncHandler ( async (req, res) => {
         throw new ApiError(404, "Video id is invalid")
     }
 
-    try {
+    const deletedVideo = await Video.findByIdAndDelete(videoId, {
+        thumbnail: 1,
+        videoFile: 1,   
+    })
 
-        const oldVideoData = await Video.findById(videoId)
-
-        if (!oldVideoData) {
-            throw new ApiError(404, "Video not found")
-        }
-
-        if (req?.user?._id?.toString() !== oldVideoData?.owner?.toString()) {
-            throw new ApiError(404, "Unauthorized Access. You are not allowed to update this video details")
-        }
-
-        const deletedVideo = await Video.findByIdAndDelete(videoId, {
-            thumbnail: 1,
-            videoFile: 1,   
-        })
-    
-        if (!deletedVideo) {
-            throw new ApiError(400, "Error deleting video. Try again")
-        }
-    
-        await Promise.all([
-            deleteOnCloudinary(deletedVideo.videoFile.publicId, deletedVideo.videoFile.resourceType),
-            deleteOnCloudinary(deletedVideo.thumbnail.publicId, deletedVideo.thumbnail.resourceType)
-        ])
-    
-        // Remove video from related collections (optimized updates)
-        // const updatePromises = [
-        //   User.updateMany({ watchHistory: videoId }, { $pull: { watchHistory: videoId } }),
-        //   Comment.deleteMany({ video: videoId }),
-        //   Playlist.updateMany({ videos: videoId }, { $pull: { videos: videoId } }),
-        //   Like.deleteMany({ video: videoId })
-        // ];
-    
-        // await Promise.all(updatePromises);
-    
-        return res.status(200)
-            .json(new ApiResponse(200, {}, "Video has been successfully deleted"))
-    } catch (error) {
-        throw new ApiError(error.statusCode || 500, error || "Server error")
+    if (!deletedVideo) {
+        throw new ApiError(400, "Error deleting video. Try again")
     }
+
+    await Promise.all([
+        deleteOnCloudinary(deletedVideo.videoFile.publicId, deletedVideo.videoFile.resourceType),
+        deleteOnCloudinary(deletedVideo.thumbnail.publicId, deletedVideo.thumbnail.resourceType)
+    ])
+
+    // Remove video from related collections (optimized updates)
+    // const updatePromises = [
+    //   User.updateMany({ watchHistory: videoId }, { $pull: { watchHistory: videoId } }),
+    //   Comment.deleteMany({ video: videoId }),
+    //   Playlist.updateMany({ videos: videoId }, { $pull: { videos: videoId } }),
+    //   Like.deleteMany({ video: videoId })
+    // ];
+
+    // await Promise.all(updatePromises);
+
+    return res.status(200)
+        .json(new ApiResponse(200, {}, "Video has been successfully deleted"))
 } )
 
 const togglePublishStatus = asyncHandler ( async (req, res) => {
     const { videoId } = req.params;
 
-    try {
-        const oldVideoData = await Video.findById(videoId)
-    
-        if (!oldVideoData) {
-            throw new ApiError(404, "Video not found")
-        }
-    
-        if (req?.user?._id?.toString() !== oldVideoData?.owner?.toString()) {
-            throw new ApiError(404, "Unauthorized Access. You are not allowed to update this video details")
-        }
+    const oldVideoData = await Video.findById(videoId)
 
-        oldVideoData.isPublished = !oldVideoData?.isPublished
-        await oldVideoData.save()
-        
-        let videoData = {
-            ...oldVideoData._doc,
-            videoFile: oldVideoData._doc.videoFile.url,
-            thumbnail: oldVideoData._doc.thumbnail.url,
-        }
-
-        return res.status(200)
-            .json(new ApiResponse(200, videoData, "Video status is changed successfully"))
-    } catch (error) {
-        throw new ApiError(error?.statusCode || 500, error?.message || "Server Error")
+    if (!oldVideoData) {
+        throw new ApiError(404, "Video not found")
     }
+
+    oldVideoData.isPublished = !oldVideoData?.isPublished
+    await oldVideoData.save()
+    
+    let videoData = {
+        ...oldVideoData._doc,
+        videoFile: oldVideoData._doc.videoFile.url,
+        thumbnail: oldVideoData._doc.thumbnail.url,
+    }
+
+    return res.status(200)
+        .json(new ApiResponse(200, videoData, "Video status is changed successfully"))
 
 } )
 

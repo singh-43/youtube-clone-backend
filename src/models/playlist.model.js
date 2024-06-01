@@ -8,7 +8,11 @@ const playlistSchema = new Schema(
         },
         description: {
             type: String,
-            required: true,
+        },
+        privacy: {
+            type: String,
+            enum: ["Unlisted", "Private", "Public"],
+            default: "Private",
         },
         videos: [
             {

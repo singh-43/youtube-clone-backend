@@ -1,6 +1,8 @@
 import { Router } from "express";
+import { Video } from './../models/video.model.js';
 import { upload } from './../middlewares/multer.middleware.js';
 import { verifyJWT } from './../middlewares/auth.middleware.js';
+import { checkOwner } from './../middlewares/owner.middleware.js';
 import { 
     getAllVideos, getVideoById, publishAVideo,
     deleteVideo, updateVideo, togglePublishStatus,
@@ -28,6 +30,7 @@ router.route("/")
 
 router.route("/:videoId")
     .get(getVideoById)
+    .all(checkOwner('videoId', Video))
     .delete(deleteVideo)
     .patch(
         upload.fields([
@@ -42,6 +45,6 @@ router.route("/:videoId")
         ]),
         updateVideo)
 
-router.route("/toggle/publish/:videoId").patch(togglePublishStatus)
+router.route("/toggle/publish/:videoId").all(checkOwner('videoId', Video)).patch(togglePublishStatus)
 
 export default router;
