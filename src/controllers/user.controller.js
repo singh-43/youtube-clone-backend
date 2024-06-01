@@ -44,8 +44,11 @@ const registerUser = asyncHandler( async (req, res) => {
         throw new ApiError(409, "User with this email or username already exists")
     }
 
-    const avatarLocalPath = req.files?.avatar[0]?.path;
-    let coverImageLocalPath;
+    let coverImageLocalPath, avatarLocalPath;
+
+    if (req.files && Array.isArray(req.files.avatar) && req.files.avatar.length > 0) {
+        avatarLocalPath = req.files.avatar[0].path;
+    }
 
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
         coverImageLocalPath = req.files.coverImage[0].path;
@@ -87,8 +90,14 @@ const registerUser = asyncHandler( async (req, res) => {
         throw new ApiError(500, "Something went wrong while registering the user")
     }
 
+    let userData = {
+        ...rest,
+        avatar: rest?.avatar.url,
+        coverImage: rest?.coverImage.url,
+    }
+
     return res.status(201).json(
-        new ApiResponse(200, rest, "User registered successfully")
+        new ApiResponse(200, userData, "User registered successfully")
     )
 } )
 
@@ -118,14 +127,20 @@ const loginUser = asyncHandler( async (req, res) => {
 
     const { accessToken, refreshToken, user: loggedInUser } = await generateAccessAndRefreshTokens(user);
 
-    const { password: _password, refreshToken: _refreshToken, ...rest } = loggedInUser._doc;
+    const { password: _password, refreshToken: _refreshToken, ...rest } = loggedInUser._doc;    
+
+    let userData = {
+        ...rest,
+        avatar: rest?.avatar.url,
+        coverImage: rest?.coverImage.url,
+    }
 
     return res.status(200)
         .cookie("accessToken", accessToken, options)
         .cookie("refreshToken", refreshToken, options)
         .json(
             new ApiResponse(200, {
-                    user: rest, accessToken, refreshToken
+                    user: userData, accessToken, refreshToken
                 },
                 "User logged in successfully"
             )
@@ -213,9 +228,16 @@ const changeCurrentPassword = asyncHandler ( async (req, res) => {
 } )
 
 const getCurrentUser = asyncHandler ( async (req, res) => {
+
+    let userData = {
+        ...req.user._doc,
+        avatar: req.user._doc?.avatar.url,
+        coverImage: req.user._doc?.coverImage.url,
+    }
+
     return res
         .status(200)
-        .json(new ApiResponse(200, req.user, "current user fetched successfully"))
+        .json(new ApiResponse(200, userData, "current user fetched successfully"))
 } )
 
 const updateAccountDetails = asyncHandler ( async (req, res) => {
@@ -223,25 +245,42 @@ const updateAccountDetails = asyncHandler ( async (req, res) => {
 
     if (!fullName || !email) {
         throw new ApiError(400, "All fields are required")
-    } 
+    }
 
-    const user = await User.findByIdAndUpdate(
-        req.user?._id,
-        {
-            $set: {
-                fullName, email: email
+    let userData = {};
+
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.user?._id,
+            {
+                $set: {
+                    fullName, email: email
+                }
+            },
+            {
+                new: true
             }
-        },
-        {
-            new: true
+        ).select("-password -refreshToken");
+
+        if (!user) {
+            throw new ApiError(404, "User not found")
         }
-    ).select("-password -refreshToken");
+
+        userData = {
+            ...user._doc,
+            avatar: user._doc?.avatar.url,
+            coverImage: user._doc?.coverImage.url,
+        }
+    } catch (error) {
+        throw new ApiError(error.statusCode || 400, error.message.includes("duplicate key error") ? "A user with this username or email id already exists" : error.message)
+    }
+
 
     return res
         .status(200)
         .json(new ApiResponse(
             200,
-            user,
+            userData,
             "Account details updated successfully"
         ))
 } )
@@ -250,9 +289,10 @@ const updateUserCoverImage = asyncHandler ( async (req, res) => {
 
     const { url, publicId, resourceType } = req?.user.coverImage;
 
-    if (!(url || publicId || resourceType)) {
-        throw new ApiError(404, "Something went wrong while updating user cover image")
-    }
+    // use if coverImage is set to required in user model
+    // if (!(url || publicId || resourceType)) {
+    //     throw new ApiError(404, "Something went wrong while updating user cover image")
+    // }
 
     const coverImageLocalPath = req?.file.path;
     if (!coverImageLocalPath) {
@@ -295,11 +335,17 @@ const updateUserCoverImage = asyncHandler ( async (req, res) => {
         }
     }
 
+    let userData = {
+        ...user._doc,
+        avatar: user._doc?.avatar.url,
+        coverImage: user._doc?.coverImage.url,
+    }
+
     return res
         .status(200)
         .json(new ApiResponse(
             200,
-            user,
+            userData,
             "Cover image successfully updated"
         ))
 } )
@@ -353,11 +399,17 @@ const updateUserAvatar = asyncHandler ( async (req, res) => {
         }
     }
 
+    let userData = {
+        ...user._doc,
+        avatar: user._doc?.avatar.url,
+        coverImage: user._doc?.coverImage.url,
+    }
+
     return res
         .status(200)
         .json(new ApiResponse(
             200,
-            user,
+            userData,
             "Avatar successfully updated"
         ))
 } )
@@ -438,13 +490,14 @@ const getUserChannelProfile = asyncHandler( async (req, res) => {
 
 const getWatchHistory = asyncHandler ( async (req, res) => {
 
-    const user = await User.findById(req.user._id)
+    const user = await User.findById(req?.user?._id)
+    // .select("watchHistory -_id")
 
     return res
         .status(200)
         .json(new ApiResponse(
             200,
-            user.watchHistory,
+            user?.watchHistory,
             "User watch history fetched successfully"
         ))
 } )

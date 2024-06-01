@@ -22,160 +22,159 @@ const getAllVideos = asyncHandler ( async (req, res) => {
     
     /* METHOD 1 */
 
-    let sortCriteria = {}, videoQuery = {};
+    // let sortCriteria = {}, videoQuery = {};
 
-    if (query.trim() !== "") {
-        videoQuery.$or = [
-            { title: { $regex: query, $options: 'i' } },
-            { description: { $regex: query, $options: 'i' } }
-        ]
-    }
+    // if (query.trim() !== "") {
+    //     videoQuery.$or = [
+    //         { title: { $regex: query, $options: 'i' } },
+    //         { description: { $regex: query, $options: 'i' } }
+    //     ]
+    // }
     
-    if (userId && isValidObjectId(userId)) {
-        videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
-    } else if(userId) {
-        throw new ApiError(404, "Invalid user id")
-    }
+    // if (userId && isValidObjectId(userId)) {
+    //     videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
+    // } else if(userId) {
+    //     throw new ApiError(404, "Invalid user id")
+    // }
 
-    if (sortBy) {
-        sortCriteria[sortBy] = sortType === "asc" ? 1 : -1
-    }
+    // if (sortBy) {
+    //     sortCriteria[sortBy] = sortType === "asc" ? 1 : -1
+    // }
 
-    const videoData = await Video.find(videoQuery)
-    .populate("owner", "username")
-    .sort(sortCriteria)
-    .skip((page - 1) * limit)
-    .limit(limit)
+    // const videoData = await Video.find(videoQuery)
+    // .populate("owner", "username")
+    // .sort(sortCriteria)
+    // .skip((page - 1) * limit)
+    // .limit(limit)
 
-    if (!videoData) {
-        throw new ApiError(404, "Error while fetching videos");
-    }
+    // if (!videoData) {
+    //     throw new ApiError(404, "Error while fetching videos");
+    // }
 
-    const totalVideos = videoData?.length > 0 ? await Video.countDocuments() : 0;
+    // const totalVideos = await Video.find(videoQuery);
 
-    let videos = []
+    // let videos = []
 
-    videoData?.forEach((element) => {
-        element = element?._doc;
-        let obj = {
-            ...element,
-            videoFile: element?.videoFile.url,
-            thumbnail: element?.thumbnail.url,
-        };
-        videos.push(obj);
-    })
+    // videoData?.forEach((element) => {
+    //     element = element?._doc;
+    //     let obj = {
+    //         ...element,
+    //         videoFile: element?.videoFile.url,
+    //         thumbnail: element?.thumbnail.url,
+    //     };
+    //     videos.push(obj);
+    // })
 
 
-    const totalPages = totalVideos > limit ? Math.ceil(totalVideos/limit) : 1;
-    const hasNextPage = page < totalPages;
-    const hasPrevPage = page !== 1 && page <= totalPages;
-    const prevPage = hasPrevPage ? page - 1 : null;
-    const nextPage = hasNextPage ? page + 1 : null;
+    // const totalPages = totalVideos?.length > limit ? Math.ceil(totalVideos?.length/limit) : 1;
+    // const hasNextPage = page < totalPages;
+    // const hasPrevPage = page !== 1 && page <= totalPages;
+    // const prevPage = hasPrevPage ? page - 1 : null;
+    // const nextPage = hasNextPage ? page + 1 : null;
 
-    return res.status(200)
-        .json(new ApiResponse(200, {
-            videos,
-            totalVideos,
-            limit,
-            page,
-            totalPages,
-            hasPrevPage,
-            hasNextPage,
-            prevPage,
-            nextPage,
-        }, "All videos fetched successfully"))
+    // return res.status(200)
+    //     .json(new ApiResponse(200, {
+    //         videos,
+    //         totalVideos: totalVideos?.length,
+    //         limit,
+    //         page,
+    //         totalPages,
+    //         hasPrevPage,
+    //         hasNextPage,
+    //         prevPage,
+    //         nextPage,
+    //     }, "All videos fetched successfully"))
 
     /* METHOD 2 */
 
-    // let videoQuery = {}
+    let videoQuery = {}
 
-    // if (query.trim() !== "") {
-    //     videoQuery = {
-    //         $or: [
-    //             { title: { $regex: query, $options: "i" } },
-    //             { description: { $regex: query, $options: "i" } }
-    //         ]
-    //     }
-    // }
+    if (query.trim() !== "") {
+        videoQuery = {
+            $or: [
+                { title: { $regex: query, $options: "i" } },
+                { description: { $regex: query, $options: "i" } }
+            ]
+        }
+    }
 
-    // if (userId && isValidObjectId(userId)) {
-    //     videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
-    // }
+    if (userId && isValidObjectId(userId)) {
+        videoQuery.owner = mongoose.Types.ObjectId.createFromHexString(userId);
+    }
 
-    // const videosData = Video.aggregate([
-    //     {
-    //         $match: videoQuery
-    //     },
-    //     {
-    //         $lookup: {
-    //             from: "users",
-    //             localField: "owner",
-    //             foreignField: "_id",
-    //             as: "owner",
-    //             pipeline: [
-    //                 {
-    //                     $project: {
-    //                         username: 1,
-    //                         email: 1
-    //                     }
-    //                 }
-    //             ]
-    //         }
-    //     },
-    //     {
-    //         $addFields: {
-    //             owner: {
-    //                 $first: "$owner"
-    //             }
-    //         }
-    //     },        
-    //     {
-    //         $project: {
-    //             videoFile: "$videoFile.url",
-    //             thumbnail: "$thumbnail.url",
-    //             title: 1,
-    //             description: 1,
-    //             views: 1,
-    //             owner: 1,
-    //             isPublished: 1,
-    //             createdAt: 1,
-    //             updatedAt: 1,
-    //             duration: 1,
-    //         }
-    //     },
-    //     {
-    //         $sort: {
-    //             [sortBy || "createdAt"]: sortType === "asc" ? 1 : -1 || 1
-    //         }
-    //     }
-    // ])
+    const videosData = Video.aggregate([
+        {
+            $match: videoQuery
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            email: 1
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            $addFields: {
+                owner: {
+                    $first: "$owner"
+                }
+            }
+        },        
+        {
+            $project: {
+                videoFile: "$videoFile.url",
+                thumbnail: "$thumbnail.url",
+                title: 1,
+                description: 1,
+                views: 1,
+                owner: 1,
+                isPublished: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                duration: 1,
+            }
+        },
+        {
+            $sort: {
+                [sortBy || "createdAt"]: sortType === "asc" ? 1 : -1 || 1
+            }
+        }
+    ])
 
-    // const options = {
-    //     page: page,
-    //     limit: limit,
-    //     customLabels: {
-    //         totalDocs: "totalVideos",
-    //         docs: "videos",
+    const options = {
+        page: page,
+        limit: limit,
+        customLabels: {
+            totalDocs: "totalVideos",
+            docs: "videos",
 
-    //     },
-    //     skip: (page - 1) * limit,
-    //     limit: limit,
-    // }
+        },
+        skip: (page - 1) * limit,
+        limit: limit,
+    }
 
-    // Video.aggregatePaginate(videosData, options)
-    // .then((videos) => {
-    //     return res.status(200)
-    //         .json(new ApiResponse(200, videos, "All videos fetched successfully"))
-    // })
-    // .catch((error) => {
-    //     throw new ApiError(error?.statusCode || 500, error?.message || "Server Error")
-    // })
+    Video.aggregatePaginate(videosData, options)
+    .then((videos) => {
+        return res.status(200)
+            .json(new ApiResponse(200, videos, "All videos fetched successfully"))
+    })
+    .catch((error) => {
+        throw new ApiError(error?.statusCode || 500, error?.message || "Server Error")
+    })
     
 } )
 
 const publishAVideo = asyncHandler ( async (req, res) => {
     const { title, description } = req.body;
-
     
     let thumbnailLocalPath, videoLocalPath, thumbnail, video;
     
@@ -231,9 +230,15 @@ const publishAVideo = asyncHandler ( async (req, res) => {
         if (!videoUploaded) {
             throw new ApiError(500, "Their was an error in uploading video. Try again.")
         }
+
+        let uploadedVideoData = {
+            ...videoUploaded._doc,
+            videoFile: videoUploaded._doc?.videoFile.url,
+            thumbnail: videoUploaded._doc?.thumbnail.url,
+        }
     
         return res.status(200)
-            .json(new ApiResponse(200, videoUploaded, "Video published successfully"))
+            .json(new ApiResponse(200, uploadedVideoData, "Video published successfully"))
             
     } catch (error) {
         if (thumbnailLocalPath && error.message === "All fields are required") fs.unlinkSync(thumbnailLocalPath)
@@ -250,9 +255,9 @@ const publishAVideo = asyncHandler ( async (req, res) => {
                 ])
             }
         } catch (error) {
-            throw new ApiError(error.statusCode|| 500, "Error while deleting file on cloudinary")
+            throw new ApiError(error.statusCode|| 500, error.message || "Error while deleting file on cloudinary")
         }
-        throw new ApiError(error.statusCode || 500, error || "Server error")
+        throw new ApiError(error.statusCode || 500, error.message || "Server error")
     }
 
 } )
@@ -276,7 +281,6 @@ const getVideoById = asyncHandler ( async (req, res) => {
         videoFile: videoData?._doc.videoFile.url,
         thumbnail: videoData?._doc.thumbnail.url,
     }
-
 
     const user = await User.findById(req.user?._id, {
         watchHistory: 1
@@ -333,12 +337,22 @@ const updateVideo = asyncHandler ( async (req, res) => {
         videoLocalPath = req.files.videoFile[0].path;
     }
 
+    const { title, description } = req.body;
+
     try {
         if (!isValidObjectId(videoId)) {
             throw new ApiError(404, "Invalid video id")
         }
-    
-        const { title, description } = req.body;
+
+        const oldVideoData = await Video.findById(videoId)
+
+        if (!oldVideoData) {
+            throw new ApiError(404, "Video not found")
+        }
+
+        if (req?.user?._id?.toString() !== oldVideoData?.owner?.toString()) {
+            throw new ApiError(404, "Unauthorized Access. You are not allowed to update this video details")
+        }
     
         if ( title?.trim().length === 0 || description?.trim().length === 0 ) {
             throw new ApiError(404, "Video title and description cannot be empty")
@@ -372,10 +386,11 @@ const updateVideo = asyncHandler ( async (req, res) => {
                     videoFile,
                 }
             }
-        ).select("title description videoFile thumbnail -_id")
+        )
+        // .select("title description videoFile thumbnail -_id")
     
         if (!updatedVideo) {
-            throw new ApiError(400, "Video not found")
+            throw new ApiError(400, "Error updating video. Try again")
         }
 
         if (thumbnailLocalPath) {
@@ -393,10 +408,16 @@ const updateVideo = asyncHandler ( async (req, res) => {
         }
 
         updatedVideo.title = title || updatedVideo.title;
-        updatedVideo.description = description || updatedVideo.title;
+        updatedVideo.description = description || updatedVideo.description;
+
+        let updatedVideoData = {
+            ...updatedVideo._doc,
+            videoFile: updatedVideo._doc?.videoFile?.url,
+            thumbnail: updatedVideo._doc?.thumbnail?.url,
+        }
     
         return res.status(200)
-            .json(new ApiResponse(200, updatedVideo, "Video updated successfully"))
+            .json(new ApiResponse(200, updatedVideoData, "Video updated successfully"))
 
     } catch (error) {
 
@@ -413,7 +434,7 @@ const updateVideo = asyncHandler ( async (req, res) => {
         } catch (error) {
             throw new ApiError(error.statusCode || 500, error || "Error while deleting files on cloudinary")
         }
-        throw new ApiError(error.statusCode || 500, error || "Server error")
+        throw new ApiError(error.statusCode || 500, error.message || "Server error")
     }
     
 } )
@@ -426,13 +447,24 @@ const deleteVideo = asyncHandler ( async (req, res) => {
     }
 
     try {
+
+        const oldVideoData = await Video.findById(videoId)
+
+        if (!oldVideoData) {
+            throw new ApiError(404, "Video not found")
+        }
+
+        if (req?.user?._id?.toString() !== oldVideoData?.owner?.toString()) {
+            throw new ApiError(404, "Unauthorized Access. You are not allowed to update this video details")
+        }
+
         const deletedVideo = await Video.findByIdAndDelete(videoId, {
             thumbnail: 1,
             videoFile: 1,   
         })
     
         if (!deletedVideo) {
-            throw new ApiError(400, "Video not found")
+            throw new ApiError(400, "Error deleting video. Try again")
         }
     
         await Promise.all([
@@ -459,6 +491,32 @@ const deleteVideo = asyncHandler ( async (req, res) => {
 
 const togglePublishStatus = asyncHandler ( async (req, res) => {
     const { videoId } = req.params;
+
+    try {
+        const oldVideoData = await Video.findById(videoId)
+    
+        if (!oldVideoData) {
+            throw new ApiError(404, "Video not found")
+        }
+    
+        if (req?.user?._id?.toString() !== oldVideoData?.owner?.toString()) {
+            throw new ApiError(404, "Unauthorized Access. You are not allowed to update this video details")
+        }
+
+        oldVideoData.isPublished = !oldVideoData?.isPublished
+        await oldVideoData.save()
+        
+        let videoData = {
+            ...oldVideoData._doc,
+            videoFile: oldVideoData._doc.videoFile.url,
+            thumbnail: oldVideoData._doc.thumbnail.url,
+        }
+
+        return res.status(200)
+            .json(new ApiResponse(200, videoData, "Video status is changed successfully"))
+    } catch (error) {
+        throw new ApiError(error?.statusCode || 500, error?.message || "Server Error")
+    }
 
 } )
 

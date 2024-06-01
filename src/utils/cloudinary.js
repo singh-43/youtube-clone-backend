@@ -27,7 +27,7 @@ const uploadOnCloudinary = async ( localFilePath ) => {
 const deleteOnCloudinary = async ( publicId, resourceType ) => {
     try {
         if (!publicId) {
-            throw new ApiError(404, "Old image's public id is required")
+            throw new ApiError(404, "Media's url and public id is required")
         }
 
         const result = await cloudinary.uploader.destroy(
