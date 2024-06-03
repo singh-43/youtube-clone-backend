@@ -17,8 +17,8 @@ const getAllVideos = asyncHandler ( async (req, res) => {
         userId 
     } = req.query;
 
-    page = ( isNaN(page) && page <= 0 ) ? 1 : Number(page);
-    limit = ( isNaN(limit) && limit <= 0 ) ? 1 : Number(limit);
+    page = ( isNaN(page) || page <= 0 ) ? 1 : Number(page);
+    limit = ( isNaN(limit) || limit <= 0 ) ? 1 : Number(limit);
     
     /* METHOD 1 */
 
@@ -66,7 +66,7 @@ const getAllVideos = asyncHandler ( async (req, res) => {
     // })
 
 
-    // const totalPages = totalVideos?.length > limit ? Math.ceil(totalVideos?.length/limit) : 1;
+    // const totalPages = totalVideos?.length > limit ? Math.ceil(totalVideos?.length / limit) : 1;
     // const hasNextPage = page < totalPages;
     // const hasPrevPage = page !== 1 && page <= totalPages;
     // const prevPage = hasPrevPage ? page - 1 : null;
